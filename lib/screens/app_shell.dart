@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/clay_nav_bar.dart';
 import 'coming_soon_screen.dart';
 import 'home_screen.dart';
+import 'trends_screen.dart';
 
 /// Holds the bottom bar and switches between the four tabs.
 class AppShell extends StatefulWidget {
@@ -29,7 +30,7 @@ class _AppShellState extends State<AppShell> {
         index: _index,
         children: const [
           HomeScreen(),
-          ComingSoonScreen(title: 'Trends'),
+          TrendsScreen(),
           ComingSoonScreen(title: 'Insights'),
           ComingSoonScreen(title: 'Profile'),
         ],
