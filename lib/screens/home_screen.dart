@@ -1,74 +1,44 @@
 import 'package:flutter/material.dart';
 
+import '../app_scope.dart';
 import '../data/database.dart';
 import '../logic/scoring.dart';
 import '../models/sleep_night.dart';
-import '../theme/app_colors.dart';
+import '../theme/clay_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/clay.dart';
 import '../widgets/sleep_stage_ring.dart';
+import 'history_screen.dart';
 import 'log_sleep_screen.dart';
 
-const _labelStyle = TextStyle(
-  fontSize: 13,
-  fontWeight: FontWeight.w700,
-  color: AppColors.textMuted,
-);
-
-const _captionStyle = TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w600,
-  color: AppColors.textMuted,
-);
-
-const _bigNumberStyle = TextStyle(
-  fontSize: 26,
-  fontWeight: FontWeight.w800,
-  height: 1,
-);
-
-/// Listens to the database and rebuilds whenever a night or a setting
-/// changes (new log, mood tap, bedtime change...).
+/// Home tab: last night's score, stages, recovery, heart data, morning
+/// check-in and tonight's bedtime. Rebuilds whenever the database changes.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.db});
-
-  final AppDatabase db;
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Created once, so a rebuild does not restart the queries.
-  late final Stream<SettingsRow> _settings = widget.db.watchSettings();
-  late final Stream<List<SleepEntry>> _nights = widget.db.watchRecentNights();
+  // Created once (on first build), so a rebuild does not restart the query.
+  late final Stream<List<SleepEntry>> _nights =
+      AppScope.of(context).db.watchNights(limit: 30);
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<SettingsRow>(
-      stream: _settings,
-      builder: (context, settingsSnap) {
-        if (settingsSnap.hasError) {
-          return _Message(text: 'Could not load settings:\n${settingsSnap.error}');
+    final settings = SettingsScope.of(context);
+    return StreamBuilder<List<SleepEntry>>(
+      stream: _nights,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _Message(text: 'Could not load nights:\n${snapshot.error}');
         }
-        final settings = settingsSnap.data;
-        if (settings == null) return const _Loading();
-
-        return StreamBuilder<List<SleepEntry>>(
-          stream: _nights,
-          builder: (context, nightsSnap) {
-            if (nightsSnap.hasError) {
-              return _Message(text: 'Could not load nights:\n${nightsSnap.error}');
-            }
-            final entries = nightsSnap.data;
-            if (entries == null) return const _Loading();
-
-            return _HomeContent(
-              db: widget.db,
-              settings: settings,
-              nights: entries.map((e) => e.toModel()).toList(),
-            );
-          },
+        final entries = snapshot.data;
+        if (entries == null) return const _Loading();
+        return _HomeContent(
+          settings: settings,
+          nights: entries.map((e) => e.toModel()).toList(),
         );
       },
     );
@@ -76,25 +46,27 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeContent extends StatelessWidget {
-  const _HomeContent({
-    required this.db,
-    required this.settings,
-    required this.nights,
-  });
+  const _HomeContent({required this.settings, required this.nights});
 
-  final AppDatabase db;
   final SettingsRow settings;
 
-  /// Newest first.
+  /// Newest first, naps excluded.
   final List<SleepNight> nights;
 
   void _openLog(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => LogSleepScreen(db: db)),
+      MaterialPageRoute<void>(builder: (_) => const LogSleepScreen()),
+    );
+  }
+
+  void _openHistory(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const HistoryScreen()),
     );
   }
 
   Future<void> _pickBedtime(BuildContext context) async {
+    final db = AppScope.of(context).db;
     final current = settings.bedtimeGoalMinutes;
     final picked = await showTimePicker(
       context: context,
@@ -107,8 +79,8 @@ class _HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final db = AppScope.of(context).db;
     final latest = nights.isEmpty ? null : nights.first;
-    final latestId = latest?.id;
 
     return SafeArea(
       bottom: false,
@@ -121,12 +93,13 @@ class _HomeContent extends StatelessWidget {
               date: DateTime.now(),
               userName: settings.userName,
               onLog: () => _openLog(context),
+              onHistory: () => _openHistory(context),
             ),
             const SizedBox(height: 18),
             if (latest == null)
               _EmptyState(onLog: () => _openLog(context))
             else
-              ..._latestNight(latest, latestId),
+              ..._latestNight(context, latest),
             const SizedBox(height: 18),
             _BedtimeCard(
               bedtimeMinutes: settings.bedtimeGoalMinutes,
@@ -140,12 +113,10 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  List<Widget> _latestNight(SleepNight night, int? nightId) {
-    final scores = scoreNight(
-      night,
-      previous: nights.skip(1).toList(),
-      goalMinutes: settings.sleepGoalMinutes,
-    );
+  List<Widget> _latestNight(BuildContext context, SleepNight night) {
+    final db = AppScope.of(context).db;
+    final scores = scoreAt(nights, 0, goalMinutes: settings.sleepGoalMinutes);
+    final nightId = night.id;
     return [
       Center(
         child: SleepStageRing(
@@ -163,9 +134,7 @@ class _HomeContent extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: _RecoveryCard(percent: scores.recoveryPercent),
-            ),
+            Expanded(child: _RecoveryCard(percent: scores.recoveryPercent)),
             const SizedBox(width: 16),
             Expanded(
               child: _HeartRateCard(
@@ -179,9 +148,8 @@ class _HomeContent extends StatelessWidget {
       const SizedBox(height: 18),
       _MoodCard(
         selected: night.mood,
-        onSelected: nightId == null
-            ? null
-            : (value) => db.setMood(nightId, value),
+        onSelected:
+            nightId == null ? null : (value) => db.setMood(nightId, value),
       ),
     ];
   }
@@ -192,9 +160,7 @@ class _Loading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(color: AppColors.accent),
-    );
+    return Center(child: CircularProgressIndicator(color: context.clay.accent));
   }
 }
 
@@ -209,7 +175,11 @@ class _Message extends StatelessWidget {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(text, textAlign: TextAlign.center, style: _labelStyle),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: context.clay.textMuted),
+          ),
         ),
       ),
     );
@@ -221,14 +191,17 @@ class _Header extends StatelessWidget {
     required this.date,
     required this.userName,
     required this.onLog,
+    required this.onHistory,
   });
 
   final DateTime date;
   final String userName;
   final VoidCallback onLog;
+  final VoidCallback onHistory;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     return Row(
       children: [
         Expanded(
@@ -237,14 +210,16 @@ class _Header extends StatelessWidget {
             children: [
               Text(
                 formatLongDate(date),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textMuted,
+                  color: c.textMuted,
                 ),
               ),
               Text(
                 'Hi $userName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -254,14 +229,17 @@ class _Header extends StatelessWidget {
           ),
         ),
         ClayCircleButton(
+          onTap: onHistory,
+          semanticLabel: 'Sleep history',
+          depth: 6,
+          child: Icon(Icons.history_rounded, size: 24, color: c.text),
+        ),
+        const SizedBox(width: 14),
+        ClayCircleButton(
           onTap: onLog,
           semanticLabel: 'Log sleep',
           depth: 6,
-          child: const Icon(
-            Icons.add_rounded,
-            size: 26,
-            color: AppColors.accent,
-          ),
+          child: Icon(Icons.add_rounded, size: 26, color: c.accent),
         ),
       ],
     );
@@ -275,25 +253,26 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     return ClayCard(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
       child: Column(
         children: [
-          const Icon(
-            Icons.bedtime_outlined,
-            size: 40,
-            color: AppColors.remSleep,
-          ),
+          Icon(Icons.bedtime_outlined, size: 40, color: c.remSleep),
           const SizedBox(height: 12),
           const Text(
             'No sleep logged yet',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Log last night to see your sleep score.',
             textAlign: TextAlign.center,
-            style: _labelStyle,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: c.textMuted,
+            ),
           ),
           const SizedBox(height: 20),
           ClayPillButton(
@@ -314,15 +293,13 @@ class _AsleepLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     return Text.rich(
       TextSpan(
         children: [
           TextSpan(
             text: formatDuration(night.totalAsleep),
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w800, color: c.text),
           ),
           TextSpan(
             text: ' asleep · ${formatTime(night.bedtime)} – '
@@ -331,10 +308,10 @@ class _AsleepLine extends StatelessWidget {
         ],
       ),
       textAlign: TextAlign.center,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: AppColors.textMuted,
+        color: c.textMuted,
       ),
     );
   }
@@ -347,33 +324,38 @@ class _StageLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final stages = night.stages;
     if (stages == null) {
-      return const Text(
+      return Text(
         'Sleep stages show up once a watch syncs through Health Connect.',
         textAlign: TextAlign.center,
-        style: _captionStyle,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: c.textMuted,
+        ),
       );
     }
     return Row(
       children: [
         Expanded(
-          child: _LegendItem(
-            color: AppColors.deepSleep,
+          child: StageLegendItem(
+            color: c.deepSleep,
             label: 'Deep',
             value: formatDuration(stages.deep),
           ),
         ),
         Expanded(
-          child: _LegendItem(
-            color: AppColors.remSleep,
+          child: StageLegendItem(
+            color: c.remSleep,
             label: 'REM',
             value: formatDuration(stages.rem),
           ),
         ),
         Expanded(
-          child: _LegendItem(
-            color: AppColors.lightSleep,
+          child: StageLegendItem(
+            color: c.lightSleep,
             label: 'Light',
             value: formatDuration(stages.light),
           ),
@@ -383,8 +365,10 @@ class _StageLegend extends StatelessWidget {
   }
 }
 
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({
+/// Coloured dot + label + value. Also used on the Trends screen.
+class StageLegendItem extends StatelessWidget {
+  const StageLegendItem({
+    super.key,
     required this.color,
     required this.label,
     required this.value,
@@ -396,6 +380,7 @@ class _LegendItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     return Column(
       children: [
         Row(
@@ -409,10 +394,10 @@ class _LegendItem extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textMuted,
+                color: c.textMuted,
               ),
             ),
           ],
@@ -435,40 +420,42 @@ class _RecoveryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final value = percent;
     return ClayCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Recovery', style: _labelStyle),
+          Text(
+            'Recovery',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: c.textMuted,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(value == null ? '—' : '$value%', style: _bigNumberStyle),
+          Text(
+            value == null ? '—' : '$value%',
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
           const SizedBox(height: 10),
           if (value == null)
-            const Text('Check in below', style: _captionStyle)
-          else
-            SizedBox(
-              width: double.infinity,
-              height: 8,
-              child: Stack(
-                children: [
-                  const Positioned.fill(
-                    child: ClayInset(radius: 4, depth: 2),
-                  ),
-                  FractionallySizedBox(
-                    widthFactor: (value / 100).clamp(0.0, 1.0).toDouble(),
-                    heightFactor: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.vitals,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ],
+            Text(
+              'Check in below',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: c.textMuted,
               ),
-            ),
+            )
+          else
+            ClayProgressBar(value: value / 100, color: c.vitals),
         ],
       ),
     );
@@ -483,22 +470,24 @@ class _HeartRateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final rhr = restingHeartRate;
     final hrv = hrvMs;
+    final labelStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      color: c.textMuted,
+    );
     return ClayCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Heart rate', style: _labelStyle),
-              Icon(
-                Icons.favorite_border_rounded,
-                size: 18,
-                color: AppColors.vitals,
-              ),
+              Text('Heart rate', style: labelStyle),
+              Icon(Icons.favorite_border_rounded, size: 18, color: c.vitals),
             ],
           ),
           const SizedBox(height: 6),
@@ -509,10 +498,13 @@ class _HeartRateCard extends StatelessWidget {
               children: [
                 TextSpan(
                   text: rhr == null ? '—' : '$rhr',
-                  style: _bigNumberStyle,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
                 ),
-                if (rhr != null)
-                  const TextSpan(text: ' bpm resting', style: _labelStyle),
+                if (rhr != null) TextSpan(text: ' bpm resting', style: labelStyle),
               ],
             ),
             maxLines: 1,
@@ -523,7 +515,11 @@ class _HeartRateCard extends StatelessWidget {
             hrv != null
                 ? 'HRV $hrv ms'
                 : (rhr == null ? 'No heart data yet' : 'HRV —'),
-            style: _captionStyle,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: c.textMuted,
+            ),
           ),
         ],
       ),
@@ -541,10 +537,11 @@ class _MoodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const hintStyle = TextStyle(
+    final c = context.clay;
+    final hintStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w700,
-      color: AppColors.textMuted,
+      color: c.textMuted,
     );
     final onSelected = this.onSelected;
     return ClayCard(
@@ -561,26 +558,23 @@ class _MoodCard extends StatelessWidget {
             children: [
               for (var value = 1; value <= 5; value++)
                 ClayCircleButton(
-                  onTap: () => onSelected?.call(value),
+                  onTap: onSelected == null ? null : () => onSelected(value),
                   semanticLabel: 'Feeling $value out of 5',
                   selected: value == selected,
-                  color: value == selected
-                      ? AppColors.accent
-                      : AppColors.background,
+                  color: value == selected ? c.accent : null,
                   child: Text(
                     '$value',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color:
-                          value == selected ? Colors.white : AppColors.text,
+                      color: value == selected ? c.onAccent : c.text,
                     ),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 12),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Drained', style: hintStyle),
@@ -609,7 +603,8 @@ class _BedtimeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = formatClock(bedtimeMinutes ~/ 60, bedtimeMinutes % 60);
+    final c = context.clay;
+    final time = formatMinutesOfDay(bedtimeMinutes);
     return ClayCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -625,22 +620,18 @@ class _BedtimeCard extends StatelessWidget {
                 onTap: onBedtimeTap,
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.bedtime_outlined,
-                      size: 24,
-                      color: AppColors.accent,
-                    ),
+                    Icon(Icons.bedtime_outlined, size: 24, color: c.accent),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             "Tonight's bedtime",
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMuted,
+                              color: c.textMuted,
                             ),
                           ),
                           Row(
@@ -653,10 +644,10 @@ class _BedtimeCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(
+                              Icon(
                                 Icons.edit_outlined,
                                 size: 16,
-                                color: AppColors.textMuted,
+                                color: c.textMuted,
                               ),
                             ],
                           ),

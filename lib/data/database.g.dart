@@ -77,6 +77,17 @@ class $SleepEntriesTable extends SleepEntries
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _awakeMinutesMeta = const VerificationMeta(
+    'awakeMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> awakeMinutes = GeneratedColumn<int>(
+    'awake_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _restingHeartRateMeta = const VerificationMeta(
     'restingHeartRate',
   );
@@ -116,6 +127,49 @@ class $SleepEntriesTable extends SleepEntries
     requiredDuringInsert: false,
     defaultValue: const Constant('manual'),
   );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isNapMeta = const VerificationMeta('isNap');
+  @override
+  late final GeneratedColumn<bool> isNap = GeneratedColumn<bool>(
+    'is_nap',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_nap" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -124,10 +178,15 @@ class $SleepEntriesTable extends SleepEntries
     deepMinutes,
     remMinutes,
     lightMinutes,
+    awakeMinutes,
     restingHeartRate,
     hrvMs,
     mood,
     source,
+    tags,
+    note,
+    isNap,
+    externalId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -184,6 +243,15 @@ class $SleepEntriesTable extends SleepEntries
         ),
       );
     }
+    if (data.containsKey('awake_minutes')) {
+      context.handle(
+        _awakeMinutesMeta,
+        awakeMinutes.isAcceptableOrUnknown(
+          data['awake_minutes']!,
+          _awakeMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('resting_heart_rate')) {
       context.handle(
         _restingHeartRateMeta,
@@ -209,6 +277,30 @@ class $SleepEntriesTable extends SleepEntries
       context.handle(
         _sourceMeta,
         source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('is_nap')) {
+      context.handle(
+        _isNapMeta,
+        isNap.isAcceptableOrUnknown(data['is_nap']!, _isNapMeta),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
       );
     }
     return context;
@@ -244,6 +336,10 @@ class $SleepEntriesTable extends SleepEntries
         DriftSqlType.int,
         data['${effectivePrefix}light_minutes'],
       ),
+      awakeMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}awake_minutes'],
+      ),
       restingHeartRate: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}resting_heart_rate'],
@@ -260,6 +356,22 @@ class $SleepEntriesTable extends SleepEntries
         DriftSqlType.string,
         data['${effectivePrefix}source'],
       )!,
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      isNap: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_nap'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
     );
   }
 
@@ -276,6 +388,9 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
   final int? deepMinutes;
   final int? remMinutes;
   final int? lightMinutes;
+
+  /// v2: minutes awake during the session (from a watch).
+  final int? awakeMinutes;
   final int? restingHeartRate;
   final int? hrvMs;
 
@@ -284,6 +399,18 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
 
   /// 'manual' or 'health_connect'.
   final String source;
+
+  /// v2: habit tag keys joined with commas, e.g. "caffeine,screens".
+  final String tags;
+
+  /// v2: free-text note.
+  final String? note;
+
+  /// v2: true for a daytime nap.
+  final bool isNap;
+
+  /// v2: Health Connect session id (avoids duplicate imports).
+  final String? externalId;
   const SleepEntry({
     required this.id,
     required this.bedtime,
@@ -291,10 +418,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
     this.deepMinutes,
     this.remMinutes,
     this.lightMinutes,
+    this.awakeMinutes,
     this.restingHeartRate,
     this.hrvMs,
     this.mood,
     required this.source,
+    required this.tags,
+    this.note,
+    required this.isNap,
+    this.externalId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -311,6 +443,9 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
     if (!nullToAbsent || lightMinutes != null) {
       map['light_minutes'] = Variable<int>(lightMinutes);
     }
+    if (!nullToAbsent || awakeMinutes != null) {
+      map['awake_minutes'] = Variable<int>(awakeMinutes);
+    }
     if (!nullToAbsent || restingHeartRate != null) {
       map['resting_heart_rate'] = Variable<int>(restingHeartRate);
     }
@@ -321,6 +456,14 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
       map['mood'] = Variable<int>(mood);
     }
     map['source'] = Variable<String>(source);
+    map['tags'] = Variable<String>(tags);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['is_nap'] = Variable<bool>(isNap);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     return map;
   }
 
@@ -338,6 +481,9 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
       lightMinutes: lightMinutes == null && nullToAbsent
           ? const Value.absent()
           : Value(lightMinutes),
+      awakeMinutes: awakeMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(awakeMinutes),
       restingHeartRate: restingHeartRate == null && nullToAbsent
           ? const Value.absent()
           : Value(restingHeartRate),
@@ -346,6 +492,12 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
           : Value(hrvMs),
       mood: mood == null && nullToAbsent ? const Value.absent() : Value(mood),
       source: Value(source),
+      tags: Value(tags),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      isNap: Value(isNap),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
     );
   }
 
@@ -361,10 +513,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
       deepMinutes: serializer.fromJson<int?>(json['deepMinutes']),
       remMinutes: serializer.fromJson<int?>(json['remMinutes']),
       lightMinutes: serializer.fromJson<int?>(json['lightMinutes']),
+      awakeMinutes: serializer.fromJson<int?>(json['awakeMinutes']),
       restingHeartRate: serializer.fromJson<int?>(json['restingHeartRate']),
       hrvMs: serializer.fromJson<int?>(json['hrvMs']),
       mood: serializer.fromJson<int?>(json['mood']),
       source: serializer.fromJson<String>(json['source']),
+      tags: serializer.fromJson<String>(json['tags']),
+      note: serializer.fromJson<String?>(json['note']),
+      isNap: serializer.fromJson<bool>(json['isNap']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
   @override
@@ -377,10 +534,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
       'deepMinutes': serializer.toJson<int?>(deepMinutes),
       'remMinutes': serializer.toJson<int?>(remMinutes),
       'lightMinutes': serializer.toJson<int?>(lightMinutes),
+      'awakeMinutes': serializer.toJson<int?>(awakeMinutes),
       'restingHeartRate': serializer.toJson<int?>(restingHeartRate),
       'hrvMs': serializer.toJson<int?>(hrvMs),
       'mood': serializer.toJson<int?>(mood),
       'source': serializer.toJson<String>(source),
+      'tags': serializer.toJson<String>(tags),
+      'note': serializer.toJson<String?>(note),
+      'isNap': serializer.toJson<bool>(isNap),
+      'externalId': serializer.toJson<String?>(externalId),
     };
   }
 
@@ -391,10 +553,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
     Value<int?> deepMinutes = const Value.absent(),
     Value<int?> remMinutes = const Value.absent(),
     Value<int?> lightMinutes = const Value.absent(),
+    Value<int?> awakeMinutes = const Value.absent(),
     Value<int?> restingHeartRate = const Value.absent(),
     Value<int?> hrvMs = const Value.absent(),
     Value<int?> mood = const Value.absent(),
     String? source,
+    String? tags,
+    Value<String?> note = const Value.absent(),
+    bool? isNap,
+    Value<String?> externalId = const Value.absent(),
   }) => SleepEntry(
     id: id ?? this.id,
     bedtime: bedtime ?? this.bedtime,
@@ -402,12 +569,17 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
     deepMinutes: deepMinutes.present ? deepMinutes.value : this.deepMinutes,
     remMinutes: remMinutes.present ? remMinutes.value : this.remMinutes,
     lightMinutes: lightMinutes.present ? lightMinutes.value : this.lightMinutes,
+    awakeMinutes: awakeMinutes.present ? awakeMinutes.value : this.awakeMinutes,
     restingHeartRate: restingHeartRate.present
         ? restingHeartRate.value
         : this.restingHeartRate,
     hrvMs: hrvMs.present ? hrvMs.value : this.hrvMs,
     mood: mood.present ? mood.value : this.mood,
     source: source ?? this.source,
+    tags: tags ?? this.tags,
+    note: note.present ? note.value : this.note,
+    isNap: isNap ?? this.isNap,
+    externalId: externalId.present ? externalId.value : this.externalId,
   );
   SleepEntry copyWithCompanion(SleepEntriesCompanion data) {
     return SleepEntry(
@@ -423,12 +595,21 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
       lightMinutes: data.lightMinutes.present
           ? data.lightMinutes.value
           : this.lightMinutes,
+      awakeMinutes: data.awakeMinutes.present
+          ? data.awakeMinutes.value
+          : this.awakeMinutes,
       restingHeartRate: data.restingHeartRate.present
           ? data.restingHeartRate.value
           : this.restingHeartRate,
       hrvMs: data.hrvMs.present ? data.hrvMs.value : this.hrvMs,
       mood: data.mood.present ? data.mood.value : this.mood,
       source: data.source.present ? data.source.value : this.source,
+      tags: data.tags.present ? data.tags.value : this.tags,
+      note: data.note.present ? data.note.value : this.note,
+      isNap: data.isNap.present ? data.isNap.value : this.isNap,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
     );
   }
 
@@ -441,10 +622,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
           ..write('deepMinutes: $deepMinutes, ')
           ..write('remMinutes: $remMinutes, ')
           ..write('lightMinutes: $lightMinutes, ')
+          ..write('awakeMinutes: $awakeMinutes, ')
           ..write('restingHeartRate: $restingHeartRate, ')
           ..write('hrvMs: $hrvMs, ')
           ..write('mood: $mood, ')
-          ..write('source: $source')
+          ..write('source: $source, ')
+          ..write('tags: $tags, ')
+          ..write('note: $note, ')
+          ..write('isNap: $isNap, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -457,10 +643,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
     deepMinutes,
     remMinutes,
     lightMinutes,
+    awakeMinutes,
     restingHeartRate,
     hrvMs,
     mood,
     source,
+    tags,
+    note,
+    isNap,
+    externalId,
   );
   @override
   bool operator ==(Object other) =>
@@ -472,10 +663,15 @@ class SleepEntry extends DataClass implements Insertable<SleepEntry> {
           other.deepMinutes == this.deepMinutes &&
           other.remMinutes == this.remMinutes &&
           other.lightMinutes == this.lightMinutes &&
+          other.awakeMinutes == this.awakeMinutes &&
           other.restingHeartRate == this.restingHeartRate &&
           other.hrvMs == this.hrvMs &&
           other.mood == this.mood &&
-          other.source == this.source);
+          other.source == this.source &&
+          other.tags == this.tags &&
+          other.note == this.note &&
+          other.isNap == this.isNap &&
+          other.externalId == this.externalId);
 }
 
 class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
@@ -485,10 +681,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
   final Value<int?> deepMinutes;
   final Value<int?> remMinutes;
   final Value<int?> lightMinutes;
+  final Value<int?> awakeMinutes;
   final Value<int?> restingHeartRate;
   final Value<int?> hrvMs;
   final Value<int?> mood;
   final Value<String> source;
+  final Value<String> tags;
+  final Value<String?> note;
+  final Value<bool> isNap;
+  final Value<String?> externalId;
   const SleepEntriesCompanion({
     this.id = const Value.absent(),
     this.bedtime = const Value.absent(),
@@ -496,10 +697,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     this.deepMinutes = const Value.absent(),
     this.remMinutes = const Value.absent(),
     this.lightMinutes = const Value.absent(),
+    this.awakeMinutes = const Value.absent(),
     this.restingHeartRate = const Value.absent(),
     this.hrvMs = const Value.absent(),
     this.mood = const Value.absent(),
     this.source = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.note = const Value.absent(),
+    this.isNap = const Value.absent(),
+    this.externalId = const Value.absent(),
   });
   SleepEntriesCompanion.insert({
     this.id = const Value.absent(),
@@ -508,10 +714,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     this.deepMinutes = const Value.absent(),
     this.remMinutes = const Value.absent(),
     this.lightMinutes = const Value.absent(),
+    this.awakeMinutes = const Value.absent(),
     this.restingHeartRate = const Value.absent(),
     this.hrvMs = const Value.absent(),
     this.mood = const Value.absent(),
     this.source = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.note = const Value.absent(),
+    this.isNap = const Value.absent(),
+    this.externalId = const Value.absent(),
   }) : bedtime = Value(bedtime),
        wakeTime = Value(wakeTime);
   static Insertable<SleepEntry> custom({
@@ -521,10 +732,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     Expression<int>? deepMinutes,
     Expression<int>? remMinutes,
     Expression<int>? lightMinutes,
+    Expression<int>? awakeMinutes,
     Expression<int>? restingHeartRate,
     Expression<int>? hrvMs,
     Expression<int>? mood,
     Expression<String>? source,
+    Expression<String>? tags,
+    Expression<String>? note,
+    Expression<bool>? isNap,
+    Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -533,10 +749,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
       if (deepMinutes != null) 'deep_minutes': deepMinutes,
       if (remMinutes != null) 'rem_minutes': remMinutes,
       if (lightMinutes != null) 'light_minutes': lightMinutes,
+      if (awakeMinutes != null) 'awake_minutes': awakeMinutes,
       if (restingHeartRate != null) 'resting_heart_rate': restingHeartRate,
       if (hrvMs != null) 'hrv_ms': hrvMs,
       if (mood != null) 'mood': mood,
       if (source != null) 'source': source,
+      if (tags != null) 'tags': tags,
+      if (note != null) 'note': note,
+      if (isNap != null) 'is_nap': isNap,
+      if (externalId != null) 'external_id': externalId,
     });
   }
 
@@ -547,10 +768,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     Value<int?>? deepMinutes,
     Value<int?>? remMinutes,
     Value<int?>? lightMinutes,
+    Value<int?>? awakeMinutes,
     Value<int?>? restingHeartRate,
     Value<int?>? hrvMs,
     Value<int?>? mood,
     Value<String>? source,
+    Value<String>? tags,
+    Value<String?>? note,
+    Value<bool>? isNap,
+    Value<String?>? externalId,
   }) {
     return SleepEntriesCompanion(
       id: id ?? this.id,
@@ -559,10 +785,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
       deepMinutes: deepMinutes ?? this.deepMinutes,
       remMinutes: remMinutes ?? this.remMinutes,
       lightMinutes: lightMinutes ?? this.lightMinutes,
+      awakeMinutes: awakeMinutes ?? this.awakeMinutes,
       restingHeartRate: restingHeartRate ?? this.restingHeartRate,
       hrvMs: hrvMs ?? this.hrvMs,
       mood: mood ?? this.mood,
       source: source ?? this.source,
+      tags: tags ?? this.tags,
+      note: note ?? this.note,
+      isNap: isNap ?? this.isNap,
+      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -587,6 +818,9 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     if (lightMinutes.present) {
       map['light_minutes'] = Variable<int>(lightMinutes.value);
     }
+    if (awakeMinutes.present) {
+      map['awake_minutes'] = Variable<int>(awakeMinutes.value);
+    }
     if (restingHeartRate.present) {
       map['resting_heart_rate'] = Variable<int>(restingHeartRate.value);
     }
@@ -598,6 +832,18 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
     }
     if (source.present) {
       map['source'] = Variable<String>(source.value);
+    }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (isNap.present) {
+      map['is_nap'] = Variable<bool>(isNap.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
     }
     return map;
   }
@@ -611,10 +857,15 @@ class SleepEntriesCompanion extends UpdateCompanion<SleepEntry> {
           ..write('deepMinutes: $deepMinutes, ')
           ..write('remMinutes: $remMinutes, ')
           ..write('lightMinutes: $lightMinutes, ')
+          ..write('awakeMinutes: $awakeMinutes, ')
           ..write('restingHeartRate: $restingHeartRate, ')
           ..write('hrvMs: $hrvMs, ')
           ..write('mood: $mood, ')
-          ..write('source: $source')
+          ..write('source: $source, ')
+          ..write('tags: $tags, ')
+          ..write('note: $note, ')
+          ..write('isNap: $isNap, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -686,6 +937,109 @@ class $AppSettingsTable extends AppSettings
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _wakeGoalMinutesMeta = const VerificationMeta(
+    'wakeGoalMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> wakeGoalMinutes = GeneratedColumn<int>(
+    'wake_goal_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(420),
+  );
+  static const VerificationMeta _windDownMinutesMeta = const VerificationMeta(
+    'windDownMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> windDownMinutes = GeneratedColumn<int>(
+    'wind_down_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(30),
+  );
+  static const VerificationMeta _morningReminderMeta = const VerificationMeta(
+    'morningReminder',
+  );
+  @override
+  late final GeneratedColumn<bool> morningReminder = GeneratedColumn<bool>(
+    'morning_reminder',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("morning_reminder" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _onboardingDoneMeta = const VerificationMeta(
+    'onboardingDone',
+  );
+  @override
+  late final GeneratedColumn<bool> onboardingDone = GeneratedColumn<bool>(
+    'onboarding_done',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("onboarding_done" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _themeModeMeta = const VerificationMeta(
+    'themeMode',
+  );
+  @override
+  late final GeneratedColumn<String> themeMode = GeneratedColumn<String>(
+    'theme_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('system'),
+  );
+  static const VerificationMeta _healthConnectEnabledMeta =
+      const VerificationMeta('healthConnectEnabled');
+  @override
+  late final GeneratedColumn<bool> healthConnectEnabled = GeneratedColumn<bool>(
+    'health_connect_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("health_connect_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastHealthSyncMeta = const VerificationMeta(
+    'lastHealthSync',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastHealthSync =
+      GeneratedColumn<DateTime>(
+        'last_health_sync',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastBackupAtMeta = const VerificationMeta(
+    'lastBackupAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastBackupAt = GeneratedColumn<DateTime>(
+    'last_backup_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -693,6 +1047,14 @@ class $AppSettingsTable extends AppSettings
     sleepGoalMinutes,
     bedtimeGoalMinutes,
     bedtimeReminder,
+    wakeGoalMinutes,
+    windDownMinutes,
+    morningReminder,
+    onboardingDone,
+    themeMode,
+    healthConnectEnabled,
+    lastHealthSync,
+    lastBackupAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -742,6 +1104,75 @@ class $AppSettingsTable extends AppSettings
         ),
       );
     }
+    if (data.containsKey('wake_goal_minutes')) {
+      context.handle(
+        _wakeGoalMinutesMeta,
+        wakeGoalMinutes.isAcceptableOrUnknown(
+          data['wake_goal_minutes']!,
+          _wakeGoalMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wind_down_minutes')) {
+      context.handle(
+        _windDownMinutesMeta,
+        windDownMinutes.isAcceptableOrUnknown(
+          data['wind_down_minutes']!,
+          _windDownMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('morning_reminder')) {
+      context.handle(
+        _morningReminderMeta,
+        morningReminder.isAcceptableOrUnknown(
+          data['morning_reminder']!,
+          _morningReminderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('onboarding_done')) {
+      context.handle(
+        _onboardingDoneMeta,
+        onboardingDone.isAcceptableOrUnknown(
+          data['onboarding_done']!,
+          _onboardingDoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('theme_mode')) {
+      context.handle(
+        _themeModeMeta,
+        themeMode.isAcceptableOrUnknown(data['theme_mode']!, _themeModeMeta),
+      );
+    }
+    if (data.containsKey('health_connect_enabled')) {
+      context.handle(
+        _healthConnectEnabledMeta,
+        healthConnectEnabled.isAcceptableOrUnknown(
+          data['health_connect_enabled']!,
+          _healthConnectEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_health_sync')) {
+      context.handle(
+        _lastHealthSyncMeta,
+        lastHealthSync.isAcceptableOrUnknown(
+          data['last_health_sync']!,
+          _lastHealthSyncMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_backup_at')) {
+      context.handle(
+        _lastBackupAtMeta,
+        lastBackupAt.isAcceptableOrUnknown(
+          data['last_backup_at']!,
+          _lastBackupAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -771,6 +1202,38 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.bool,
         data['${effectivePrefix}bedtime_reminder'],
       )!,
+      wakeGoalMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wake_goal_minutes'],
+      )!,
+      windDownMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wind_down_minutes'],
+      )!,
+      morningReminder: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}morning_reminder'],
+      )!,
+      onboardingDone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}onboarding_done'],
+      )!,
+      themeMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}theme_mode'],
+      )!,
+      healthConnectEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}health_connect_enabled'],
+      )!,
+      lastHealthSync: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_health_sync'],
+      ),
+      lastBackupAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_backup_at'],
+      ),
     );
   }
 
@@ -790,12 +1253,44 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
   /// Bedtime goal as minutes after midnight (1365 = 10:45 PM).
   final int bedtimeGoalMinutes;
   final bool bedtimeReminder;
+
+  /// v2: wake-up goal, minutes after midnight (420 = 7:00 AM).
+  final int wakeGoalMinutes;
+
+  /// v2: how many minutes before bedtime the wind-down reminder fires.
+  final int windDownMinutes;
+
+  /// v2: "How did you sleep?" reminder in the morning.
+  final bool morningReminder;
+
+  /// v2: false until the user finishes onboarding.
+  final bool onboardingDone;
+
+  /// v2: 'system', 'light' or 'dark'.
+  final String themeMode;
+
+  /// v2: user connected Health Connect.
+  final bool healthConnectEnabled;
+
+  /// v2: last successful Health Connect import.
+  final DateTime? lastHealthSync;
+
+  /// v2: last successful cloud backup.
+  final DateTime? lastBackupAt;
   const SettingsRow({
     required this.id,
     required this.userName,
     required this.sleepGoalMinutes,
     required this.bedtimeGoalMinutes,
     required this.bedtimeReminder,
+    required this.wakeGoalMinutes,
+    required this.windDownMinutes,
+    required this.morningReminder,
+    required this.onboardingDone,
+    required this.themeMode,
+    required this.healthConnectEnabled,
+    this.lastHealthSync,
+    this.lastBackupAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -805,6 +1300,18 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     map['sleep_goal_minutes'] = Variable<int>(sleepGoalMinutes);
     map['bedtime_goal_minutes'] = Variable<int>(bedtimeGoalMinutes);
     map['bedtime_reminder'] = Variable<bool>(bedtimeReminder);
+    map['wake_goal_minutes'] = Variable<int>(wakeGoalMinutes);
+    map['wind_down_minutes'] = Variable<int>(windDownMinutes);
+    map['morning_reminder'] = Variable<bool>(morningReminder);
+    map['onboarding_done'] = Variable<bool>(onboardingDone);
+    map['theme_mode'] = Variable<String>(themeMode);
+    map['health_connect_enabled'] = Variable<bool>(healthConnectEnabled);
+    if (!nullToAbsent || lastHealthSync != null) {
+      map['last_health_sync'] = Variable<DateTime>(lastHealthSync);
+    }
+    if (!nullToAbsent || lastBackupAt != null) {
+      map['last_backup_at'] = Variable<DateTime>(lastBackupAt);
+    }
     return map;
   }
 
@@ -815,6 +1322,18 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       sleepGoalMinutes: Value(sleepGoalMinutes),
       bedtimeGoalMinutes: Value(bedtimeGoalMinutes),
       bedtimeReminder: Value(bedtimeReminder),
+      wakeGoalMinutes: Value(wakeGoalMinutes),
+      windDownMinutes: Value(windDownMinutes),
+      morningReminder: Value(morningReminder),
+      onboardingDone: Value(onboardingDone),
+      themeMode: Value(themeMode),
+      healthConnectEnabled: Value(healthConnectEnabled),
+      lastHealthSync: lastHealthSync == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastHealthSync),
+      lastBackupAt: lastBackupAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastBackupAt),
     );
   }
 
@@ -829,6 +1348,16 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       sleepGoalMinutes: serializer.fromJson<int>(json['sleepGoalMinutes']),
       bedtimeGoalMinutes: serializer.fromJson<int>(json['bedtimeGoalMinutes']),
       bedtimeReminder: serializer.fromJson<bool>(json['bedtimeReminder']),
+      wakeGoalMinutes: serializer.fromJson<int>(json['wakeGoalMinutes']),
+      windDownMinutes: serializer.fromJson<int>(json['windDownMinutes']),
+      morningReminder: serializer.fromJson<bool>(json['morningReminder']),
+      onboardingDone: serializer.fromJson<bool>(json['onboardingDone']),
+      themeMode: serializer.fromJson<String>(json['themeMode']),
+      healthConnectEnabled: serializer.fromJson<bool>(
+        json['healthConnectEnabled'],
+      ),
+      lastHealthSync: serializer.fromJson<DateTime?>(json['lastHealthSync']),
+      lastBackupAt: serializer.fromJson<DateTime?>(json['lastBackupAt']),
     );
   }
   @override
@@ -840,6 +1369,14 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       'sleepGoalMinutes': serializer.toJson<int>(sleepGoalMinutes),
       'bedtimeGoalMinutes': serializer.toJson<int>(bedtimeGoalMinutes),
       'bedtimeReminder': serializer.toJson<bool>(bedtimeReminder),
+      'wakeGoalMinutes': serializer.toJson<int>(wakeGoalMinutes),
+      'windDownMinutes': serializer.toJson<int>(windDownMinutes),
+      'morningReminder': serializer.toJson<bool>(morningReminder),
+      'onboardingDone': serializer.toJson<bool>(onboardingDone),
+      'themeMode': serializer.toJson<String>(themeMode),
+      'healthConnectEnabled': serializer.toJson<bool>(healthConnectEnabled),
+      'lastHealthSync': serializer.toJson<DateTime?>(lastHealthSync),
+      'lastBackupAt': serializer.toJson<DateTime?>(lastBackupAt),
     };
   }
 
@@ -849,12 +1386,30 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     int? sleepGoalMinutes,
     int? bedtimeGoalMinutes,
     bool? bedtimeReminder,
+    int? wakeGoalMinutes,
+    int? windDownMinutes,
+    bool? morningReminder,
+    bool? onboardingDone,
+    String? themeMode,
+    bool? healthConnectEnabled,
+    Value<DateTime?> lastHealthSync = const Value.absent(),
+    Value<DateTime?> lastBackupAt = const Value.absent(),
   }) => SettingsRow(
     id: id ?? this.id,
     userName: userName ?? this.userName,
     sleepGoalMinutes: sleepGoalMinutes ?? this.sleepGoalMinutes,
     bedtimeGoalMinutes: bedtimeGoalMinutes ?? this.bedtimeGoalMinutes,
     bedtimeReminder: bedtimeReminder ?? this.bedtimeReminder,
+    wakeGoalMinutes: wakeGoalMinutes ?? this.wakeGoalMinutes,
+    windDownMinutes: windDownMinutes ?? this.windDownMinutes,
+    morningReminder: morningReminder ?? this.morningReminder,
+    onboardingDone: onboardingDone ?? this.onboardingDone,
+    themeMode: themeMode ?? this.themeMode,
+    healthConnectEnabled: healthConnectEnabled ?? this.healthConnectEnabled,
+    lastHealthSync: lastHealthSync.present
+        ? lastHealthSync.value
+        : this.lastHealthSync,
+    lastBackupAt: lastBackupAt.present ? lastBackupAt.value : this.lastBackupAt,
   );
   SettingsRow copyWithCompanion(AppSettingsCompanion data) {
     return SettingsRow(
@@ -869,6 +1424,28 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       bedtimeReminder: data.bedtimeReminder.present
           ? data.bedtimeReminder.value
           : this.bedtimeReminder,
+      wakeGoalMinutes: data.wakeGoalMinutes.present
+          ? data.wakeGoalMinutes.value
+          : this.wakeGoalMinutes,
+      windDownMinutes: data.windDownMinutes.present
+          ? data.windDownMinutes.value
+          : this.windDownMinutes,
+      morningReminder: data.morningReminder.present
+          ? data.morningReminder.value
+          : this.morningReminder,
+      onboardingDone: data.onboardingDone.present
+          ? data.onboardingDone.value
+          : this.onboardingDone,
+      themeMode: data.themeMode.present ? data.themeMode.value : this.themeMode,
+      healthConnectEnabled: data.healthConnectEnabled.present
+          ? data.healthConnectEnabled.value
+          : this.healthConnectEnabled,
+      lastHealthSync: data.lastHealthSync.present
+          ? data.lastHealthSync.value
+          : this.lastHealthSync,
+      lastBackupAt: data.lastBackupAt.present
+          ? data.lastBackupAt.value
+          : this.lastBackupAt,
     );
   }
 
@@ -879,7 +1456,15 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ..write('userName: $userName, ')
           ..write('sleepGoalMinutes: $sleepGoalMinutes, ')
           ..write('bedtimeGoalMinutes: $bedtimeGoalMinutes, ')
-          ..write('bedtimeReminder: $bedtimeReminder')
+          ..write('bedtimeReminder: $bedtimeReminder, ')
+          ..write('wakeGoalMinutes: $wakeGoalMinutes, ')
+          ..write('windDownMinutes: $windDownMinutes, ')
+          ..write('morningReminder: $morningReminder, ')
+          ..write('onboardingDone: $onboardingDone, ')
+          ..write('themeMode: $themeMode, ')
+          ..write('healthConnectEnabled: $healthConnectEnabled, ')
+          ..write('lastHealthSync: $lastHealthSync, ')
+          ..write('lastBackupAt: $lastBackupAt')
           ..write(')'))
         .toString();
   }
@@ -891,6 +1476,14 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     sleepGoalMinutes,
     bedtimeGoalMinutes,
     bedtimeReminder,
+    wakeGoalMinutes,
+    windDownMinutes,
+    morningReminder,
+    onboardingDone,
+    themeMode,
+    healthConnectEnabled,
+    lastHealthSync,
+    lastBackupAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -900,7 +1493,15 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           other.userName == this.userName &&
           other.sleepGoalMinutes == this.sleepGoalMinutes &&
           other.bedtimeGoalMinutes == this.bedtimeGoalMinutes &&
-          other.bedtimeReminder == this.bedtimeReminder);
+          other.bedtimeReminder == this.bedtimeReminder &&
+          other.wakeGoalMinutes == this.wakeGoalMinutes &&
+          other.windDownMinutes == this.windDownMinutes &&
+          other.morningReminder == this.morningReminder &&
+          other.onboardingDone == this.onboardingDone &&
+          other.themeMode == this.themeMode &&
+          other.healthConnectEnabled == this.healthConnectEnabled &&
+          other.lastHealthSync == this.lastHealthSync &&
+          other.lastBackupAt == this.lastBackupAt);
 }
 
 class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
@@ -909,12 +1510,28 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
   final Value<int> sleepGoalMinutes;
   final Value<int> bedtimeGoalMinutes;
   final Value<bool> bedtimeReminder;
+  final Value<int> wakeGoalMinutes;
+  final Value<int> windDownMinutes;
+  final Value<bool> morningReminder;
+  final Value<bool> onboardingDone;
+  final Value<String> themeMode;
+  final Value<bool> healthConnectEnabled;
+  final Value<DateTime?> lastHealthSync;
+  final Value<DateTime?> lastBackupAt;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
     this.userName = const Value.absent(),
     this.sleepGoalMinutes = const Value.absent(),
     this.bedtimeGoalMinutes = const Value.absent(),
     this.bedtimeReminder = const Value.absent(),
+    this.wakeGoalMinutes = const Value.absent(),
+    this.windDownMinutes = const Value.absent(),
+    this.morningReminder = const Value.absent(),
+    this.onboardingDone = const Value.absent(),
+    this.themeMode = const Value.absent(),
+    this.healthConnectEnabled = const Value.absent(),
+    this.lastHealthSync = const Value.absent(),
+    this.lastBackupAt = const Value.absent(),
   });
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
@@ -922,6 +1539,14 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
     this.sleepGoalMinutes = const Value.absent(),
     this.bedtimeGoalMinutes = const Value.absent(),
     this.bedtimeReminder = const Value.absent(),
+    this.wakeGoalMinutes = const Value.absent(),
+    this.windDownMinutes = const Value.absent(),
+    this.morningReminder = const Value.absent(),
+    this.onboardingDone = const Value.absent(),
+    this.themeMode = const Value.absent(),
+    this.healthConnectEnabled = const Value.absent(),
+    this.lastHealthSync = const Value.absent(),
+    this.lastBackupAt = const Value.absent(),
   });
   static Insertable<SettingsRow> custom({
     Expression<int>? id,
@@ -929,6 +1554,14 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
     Expression<int>? sleepGoalMinutes,
     Expression<int>? bedtimeGoalMinutes,
     Expression<bool>? bedtimeReminder,
+    Expression<int>? wakeGoalMinutes,
+    Expression<int>? windDownMinutes,
+    Expression<bool>? morningReminder,
+    Expression<bool>? onboardingDone,
+    Expression<String>? themeMode,
+    Expression<bool>? healthConnectEnabled,
+    Expression<DateTime>? lastHealthSync,
+    Expression<DateTime>? lastBackupAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -937,6 +1570,15 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
       if (bedtimeGoalMinutes != null)
         'bedtime_goal_minutes': bedtimeGoalMinutes,
       if (bedtimeReminder != null) 'bedtime_reminder': bedtimeReminder,
+      if (wakeGoalMinutes != null) 'wake_goal_minutes': wakeGoalMinutes,
+      if (windDownMinutes != null) 'wind_down_minutes': windDownMinutes,
+      if (morningReminder != null) 'morning_reminder': morningReminder,
+      if (onboardingDone != null) 'onboarding_done': onboardingDone,
+      if (themeMode != null) 'theme_mode': themeMode,
+      if (healthConnectEnabled != null)
+        'health_connect_enabled': healthConnectEnabled,
+      if (lastHealthSync != null) 'last_health_sync': lastHealthSync,
+      if (lastBackupAt != null) 'last_backup_at': lastBackupAt,
     });
   }
 
@@ -946,6 +1588,14 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
     Value<int>? sleepGoalMinutes,
     Value<int>? bedtimeGoalMinutes,
     Value<bool>? bedtimeReminder,
+    Value<int>? wakeGoalMinutes,
+    Value<int>? windDownMinutes,
+    Value<bool>? morningReminder,
+    Value<bool>? onboardingDone,
+    Value<String>? themeMode,
+    Value<bool>? healthConnectEnabled,
+    Value<DateTime?>? lastHealthSync,
+    Value<DateTime?>? lastBackupAt,
   }) {
     return AppSettingsCompanion(
       id: id ?? this.id,
@@ -953,6 +1603,14 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
       sleepGoalMinutes: sleepGoalMinutes ?? this.sleepGoalMinutes,
       bedtimeGoalMinutes: bedtimeGoalMinutes ?? this.bedtimeGoalMinutes,
       bedtimeReminder: bedtimeReminder ?? this.bedtimeReminder,
+      wakeGoalMinutes: wakeGoalMinutes ?? this.wakeGoalMinutes,
+      windDownMinutes: windDownMinutes ?? this.windDownMinutes,
+      morningReminder: morningReminder ?? this.morningReminder,
+      onboardingDone: onboardingDone ?? this.onboardingDone,
+      themeMode: themeMode ?? this.themeMode,
+      healthConnectEnabled: healthConnectEnabled ?? this.healthConnectEnabled,
+      lastHealthSync: lastHealthSync ?? this.lastHealthSync,
+      lastBackupAt: lastBackupAt ?? this.lastBackupAt,
     );
   }
 
@@ -974,6 +1632,32 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
     if (bedtimeReminder.present) {
       map['bedtime_reminder'] = Variable<bool>(bedtimeReminder.value);
     }
+    if (wakeGoalMinutes.present) {
+      map['wake_goal_minutes'] = Variable<int>(wakeGoalMinutes.value);
+    }
+    if (windDownMinutes.present) {
+      map['wind_down_minutes'] = Variable<int>(windDownMinutes.value);
+    }
+    if (morningReminder.present) {
+      map['morning_reminder'] = Variable<bool>(morningReminder.value);
+    }
+    if (onboardingDone.present) {
+      map['onboarding_done'] = Variable<bool>(onboardingDone.value);
+    }
+    if (themeMode.present) {
+      map['theme_mode'] = Variable<String>(themeMode.value);
+    }
+    if (healthConnectEnabled.present) {
+      map['health_connect_enabled'] = Variable<bool>(
+        healthConnectEnabled.value,
+      );
+    }
+    if (lastHealthSync.present) {
+      map['last_health_sync'] = Variable<DateTime>(lastHealthSync.value);
+    }
+    if (lastBackupAt.present) {
+      map['last_backup_at'] = Variable<DateTime>(lastBackupAt.value);
+    }
     return map;
   }
 
@@ -984,7 +1668,15 @@ class AppSettingsCompanion extends UpdateCompanion<SettingsRow> {
           ..write('userName: $userName, ')
           ..write('sleepGoalMinutes: $sleepGoalMinutes, ')
           ..write('bedtimeGoalMinutes: $bedtimeGoalMinutes, ')
-          ..write('bedtimeReminder: $bedtimeReminder')
+          ..write('bedtimeReminder: $bedtimeReminder, ')
+          ..write('wakeGoalMinutes: $wakeGoalMinutes, ')
+          ..write('windDownMinutes: $windDownMinutes, ')
+          ..write('morningReminder: $morningReminder, ')
+          ..write('onboardingDone: $onboardingDone, ')
+          ..write('themeMode: $themeMode, ')
+          ..write('healthConnectEnabled: $healthConnectEnabled, ')
+          ..write('lastHealthSync: $lastHealthSync, ')
+          ..write('lastBackupAt: $lastBackupAt')
           ..write(')'))
         .toString();
   }
@@ -1013,10 +1705,15 @@ typedef $$SleepEntriesTableCreateCompanionBuilder =
       Value<int?> deepMinutes,
       Value<int?> remMinutes,
       Value<int?> lightMinutes,
+      Value<int?> awakeMinutes,
       Value<int?> restingHeartRate,
       Value<int?> hrvMs,
       Value<int?> mood,
       Value<String> source,
+      Value<String> tags,
+      Value<String?> note,
+      Value<bool> isNap,
+      Value<String?> externalId,
     });
 typedef $$SleepEntriesTableUpdateCompanionBuilder =
     SleepEntriesCompanion Function({
@@ -1026,10 +1723,15 @@ typedef $$SleepEntriesTableUpdateCompanionBuilder =
       Value<int?> deepMinutes,
       Value<int?> remMinutes,
       Value<int?> lightMinutes,
+      Value<int?> awakeMinutes,
       Value<int?> restingHeartRate,
       Value<int?> hrvMs,
       Value<int?> mood,
       Value<String> source,
+      Value<String> tags,
+      Value<String?> note,
+      Value<bool> isNap,
+      Value<String?> externalId,
     });
 
 class $$SleepEntriesTableFilterComposer
@@ -1071,6 +1773,11 @@ class $$SleepEntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get restingHeartRate => $composableBuilder(
     column: $table.restingHeartRate,
     builder: (column) => ColumnFilters(column),
@@ -1088,6 +1795,26 @@ class $$SleepEntriesTableFilterComposer
 
   ColumnFilters<String> get source => $composableBuilder(
     column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isNap => $composableBuilder(
+    column: $table.isNap,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1131,6 +1858,11 @@ class $$SleepEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get restingHeartRate => $composableBuilder(
     column: $table.restingHeartRate,
     builder: (column) => ColumnOrderings(column),
@@ -1148,6 +1880,26 @@ class $$SleepEntriesTableOrderingComposer
 
   ColumnOrderings<String> get source => $composableBuilder(
     column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isNap => $composableBuilder(
+    column: $table.isNap,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -1185,6 +1937,11 @@ class $$SleepEntriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get restingHeartRate => $composableBuilder(
     column: $table.restingHeartRate,
     builder: (column) => column,
@@ -1198,6 +1955,20 @@ class $$SleepEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<bool> get isNap =>
+      $composableBuilder(column: $table.isNap, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
 }
 
 class $$SleepEntriesTableTableManager
@@ -1237,10 +2008,15 @@ class $$SleepEntriesTableTableManager
                 Value<int?> deepMinutes = const Value.absent(),
                 Value<int?> remMinutes = const Value.absent(),
                 Value<int?> lightMinutes = const Value.absent(),
+                Value<int?> awakeMinutes = const Value.absent(),
                 Value<int?> restingHeartRate = const Value.absent(),
                 Value<int?> hrvMs = const Value.absent(),
                 Value<int?> mood = const Value.absent(),
                 Value<String> source = const Value.absent(),
+                Value<String> tags = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<bool> isNap = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => SleepEntriesCompanion(
                 id: id,
                 bedtime: bedtime,
@@ -1248,10 +2024,15 @@ class $$SleepEntriesTableTableManager
                 deepMinutes: deepMinutes,
                 remMinutes: remMinutes,
                 lightMinutes: lightMinutes,
+                awakeMinutes: awakeMinutes,
                 restingHeartRate: restingHeartRate,
                 hrvMs: hrvMs,
                 mood: mood,
                 source: source,
+                tags: tags,
+                note: note,
+                isNap: isNap,
+                externalId: externalId,
               ),
           createCompanionCallback:
               ({
@@ -1261,10 +2042,15 @@ class $$SleepEntriesTableTableManager
                 Value<int?> deepMinutes = const Value.absent(),
                 Value<int?> remMinutes = const Value.absent(),
                 Value<int?> lightMinutes = const Value.absent(),
+                Value<int?> awakeMinutes = const Value.absent(),
                 Value<int?> restingHeartRate = const Value.absent(),
                 Value<int?> hrvMs = const Value.absent(),
                 Value<int?> mood = const Value.absent(),
                 Value<String> source = const Value.absent(),
+                Value<String> tags = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<bool> isNap = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => SleepEntriesCompanion.insert(
                 id: id,
                 bedtime: bedtime,
@@ -1272,10 +2058,15 @@ class $$SleepEntriesTableTableManager
                 deepMinutes: deepMinutes,
                 remMinutes: remMinutes,
                 lightMinutes: lightMinutes,
+                awakeMinutes: awakeMinutes,
                 restingHeartRate: restingHeartRate,
                 hrvMs: hrvMs,
                 mood: mood,
                 source: source,
+                tags: tags,
+                note: note,
+                isNap: isNap,
+                externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -1318,6 +2109,14 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<int> sleepGoalMinutes,
       Value<int> bedtimeGoalMinutes,
       Value<bool> bedtimeReminder,
+      Value<int> wakeGoalMinutes,
+      Value<int> windDownMinutes,
+      Value<bool> morningReminder,
+      Value<bool> onboardingDone,
+      Value<String> themeMode,
+      Value<bool> healthConnectEnabled,
+      Value<DateTime?> lastHealthSync,
+      Value<DateTime?> lastBackupAt,
     });
 typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
@@ -1326,6 +2125,14 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<int> sleepGoalMinutes,
       Value<int> bedtimeGoalMinutes,
       Value<bool> bedtimeReminder,
+      Value<int> wakeGoalMinutes,
+      Value<int> windDownMinutes,
+      Value<bool> morningReminder,
+      Value<bool> onboardingDone,
+      Value<String> themeMode,
+      Value<bool> healthConnectEnabled,
+      Value<DateTime?> lastHealthSync,
+      Value<DateTime?> lastBackupAt,
     });
 
 class $$AppSettingsTableFilterComposer
@@ -1359,6 +2166,46 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<bool> get bedtimeReminder => $composableBuilder(
     column: $table.bedtimeReminder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wakeGoalMinutes => $composableBuilder(
+    column: $table.wakeGoalMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get windDownMinutes => $composableBuilder(
+    column: $table.windDownMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get morningReminder => $composableBuilder(
+    column: $table.morningReminder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get onboardingDone => $composableBuilder(
+    column: $table.onboardingDone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get themeMode => $composableBuilder(
+    column: $table.themeMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get healthConnectEnabled => $composableBuilder(
+    column: $table.healthConnectEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastHealthSync => $composableBuilder(
+    column: $table.lastHealthSync,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastBackupAt => $composableBuilder(
+    column: $table.lastBackupAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1396,6 +2243,46 @@ class $$AppSettingsTableOrderingComposer
     column: $table.bedtimeReminder,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get wakeGoalMinutes => $composableBuilder(
+    column: $table.wakeGoalMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get windDownMinutes => $composableBuilder(
+    column: $table.windDownMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get morningReminder => $composableBuilder(
+    column: $table.morningReminder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get onboardingDone => $composableBuilder(
+    column: $table.onboardingDone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get themeMode => $composableBuilder(
+    column: $table.themeMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get healthConnectEnabled => $composableBuilder(
+    column: $table.healthConnectEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastHealthSync => $composableBuilder(
+    column: $table.lastHealthSync,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastBackupAt => $composableBuilder(
+    column: $table.lastBackupAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AppSettingsTableAnnotationComposer
@@ -1425,6 +2312,44 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<bool> get bedtimeReminder => $composableBuilder(
     column: $table.bedtimeReminder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get wakeGoalMinutes => $composableBuilder(
+    column: $table.wakeGoalMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get windDownMinutes => $composableBuilder(
+    column: $table.windDownMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get morningReminder => $composableBuilder(
+    column: $table.morningReminder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get onboardingDone => $composableBuilder(
+    column: $table.onboardingDone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get themeMode =>
+      $composableBuilder(column: $table.themeMode, builder: (column) => column);
+
+  GeneratedColumn<bool> get healthConnectEnabled => $composableBuilder(
+    column: $table.healthConnectEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastHealthSync => $composableBuilder(
+    column: $table.lastHealthSync,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastBackupAt => $composableBuilder(
+    column: $table.lastBackupAt,
     builder: (column) => column,
   );
 }
@@ -1465,12 +2390,28 @@ class $$AppSettingsTableTableManager
                 Value<int> sleepGoalMinutes = const Value.absent(),
                 Value<int> bedtimeGoalMinutes = const Value.absent(),
                 Value<bool> bedtimeReminder = const Value.absent(),
+                Value<int> wakeGoalMinutes = const Value.absent(),
+                Value<int> windDownMinutes = const Value.absent(),
+                Value<bool> morningReminder = const Value.absent(),
+                Value<bool> onboardingDone = const Value.absent(),
+                Value<String> themeMode = const Value.absent(),
+                Value<bool> healthConnectEnabled = const Value.absent(),
+                Value<DateTime?> lastHealthSync = const Value.absent(),
+                Value<DateTime?> lastBackupAt = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
                 userName: userName,
                 sleepGoalMinutes: sleepGoalMinutes,
                 bedtimeGoalMinutes: bedtimeGoalMinutes,
                 bedtimeReminder: bedtimeReminder,
+                wakeGoalMinutes: wakeGoalMinutes,
+                windDownMinutes: windDownMinutes,
+                morningReminder: morningReminder,
+                onboardingDone: onboardingDone,
+                themeMode: themeMode,
+                healthConnectEnabled: healthConnectEnabled,
+                lastHealthSync: lastHealthSync,
+                lastBackupAt: lastBackupAt,
               ),
           createCompanionCallback:
               ({
@@ -1479,12 +2420,28 @@ class $$AppSettingsTableTableManager
                 Value<int> sleepGoalMinutes = const Value.absent(),
                 Value<int> bedtimeGoalMinutes = const Value.absent(),
                 Value<bool> bedtimeReminder = const Value.absent(),
+                Value<int> wakeGoalMinutes = const Value.absent(),
+                Value<int> windDownMinutes = const Value.absent(),
+                Value<bool> morningReminder = const Value.absent(),
+                Value<bool> onboardingDone = const Value.absent(),
+                Value<String> themeMode = const Value.absent(),
+                Value<bool> healthConnectEnabled = const Value.absent(),
+                Value<DateTime?> lastHealthSync = const Value.absent(),
+                Value<DateTime?> lastBackupAt = const Value.absent(),
               }) => AppSettingsCompanion.insert(
                 id: id,
                 userName: userName,
                 sleepGoalMinutes: sleepGoalMinutes,
                 bedtimeGoalMinutes: bedtimeGoalMinutes,
                 bedtimeReminder: bedtimeReminder,
+                wakeGoalMinutes: wakeGoalMinutes,
+                windDownMinutes: windDownMinutes,
+                morningReminder: morningReminder,
+                onboardingDone: onboardingDone,
+                themeMode: themeMode,
+                healthConnectEnabled: healthConnectEnabled,
+                lastHealthSync: lastHealthSync,
+                lastBackupAt: lastBackupAt,
               ),
           withReferenceMapper: (p0) => p0
               .map(

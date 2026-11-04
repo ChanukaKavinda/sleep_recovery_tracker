@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/sleep_night.dart';
-import '../theme/app_colors.dart';
+import '../theme/clay_theme.dart';
 import '../utils/formatters.dart';
 import 'clay.dart';
 
@@ -20,6 +20,7 @@ class SleepStageRing extends StatelessWidget {
     required this.score,
     required this.goalMinutes,
     this.size = 196,
+    this.onTap,
   });
 
   final SleepNight night;
@@ -27,8 +28,12 @@ class SleepStageRing extends StatelessWidget {
   final int goalMinutes;
   final double size;
 
+  /// Tap on the dial (opens the score breakdown).
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final innerSize = size - 52;
     final stages = night.stages;
 
@@ -41,11 +46,7 @@ class SleepStageRing extends StatelessWidget {
         stages.rem.inMinutes.toDouble(),
         stages.light.inMinutes.toDouble(),
       ];
-      colors = const [
-        AppColors.deepSleep,
-        AppColors.remSleep,
-        AppColors.lightSleep,
-      ];
+      colors = [c.deepSleep, c.remSleep, c.lightSleep];
       description = 'Deep ${formatDuration(stages.deep)}, '
           'REM ${formatDuration(stages.rem)}, '
           'Light ${formatDuration(stages.light)}.';
@@ -53,70 +54,83 @@ class SleepStageRing extends StatelessWidget {
       final asleep = night.totalAsleep.inMinutes.toDouble();
       final rest = asleep >= goalMinutes ? 0.0 : goalMinutes - asleep;
       values = [asleep, rest];
-      colors = const [AppColors.remSleep, Colors.transparent];
+      colors = [c.remSleep, Colors.transparent];
       description = '${formatDuration(night.totalAsleep)} asleep.';
     }
 
+    final dial = SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Raised disc.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: c.background,
+                shape: BoxShape.circle,
+                boxShadow: c.raised(10),
+              ),
+            ),
+          ),
+          // Coloured segments.
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _RingPainter(values: values, colors: colors),
+            ),
+          ),
+          // Pressed-in centre with the score.
+          ClayInset(
+            width: innerSize,
+            height: innerSize,
+            radius: innerSize / 2,
+            depth: 6,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$score',
+                  style: const TextStyle(
+                    fontSize: 56,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+                Text(
+                  'Sleep score',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: c.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final tap = onTap;
     return Semantics(
       label: 'Sleep score $score. $description',
+      button: tap != null,
+      onTap: tap,
       excludeSemantics: true,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Raised disc.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  shape: BoxShape.circle,
-                  boxShadow: clayShadows(10),
-                ),
-              ),
+      child: tap == null
+          ? dial
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: tap,
+              child: dial,
             ),
-            // Coloured segments.
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _RingPainter(values: values, colors: colors),
-              ),
-            ),
-            // Pressed-in centre with the score.
-            ClayInset(
-              width: innerSize,
-              height: innerSize,
-              radius: innerSize / 2,
-              depth: 6,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '$score',
-                    style: const TextStyle(
-                      fontSize: 56,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                  const Text(
-                    'Sleep score',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
+/// Draws coloured arcs around a circle, one per value, with small gaps.
+/// Also used by the Trends screen.
 class _RingPainter extends CustomPainter {
   const _RingPainter({required this.values, required this.colors});
 

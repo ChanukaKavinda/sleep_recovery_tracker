@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/clay_theme.dart';
 import 'clay.dart';
 
 class ClayNavItem {
@@ -60,10 +60,11 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final icon = Icon(
       item.icon,
       size: 24,
-      color: selected ? AppColors.accent : AppColors.textMuted,
+      color: selected ? c.accent : c.textMuted,
     );
     return Semantics(
       button: true,

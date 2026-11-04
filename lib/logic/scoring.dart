@@ -25,6 +25,20 @@ NightScores scoreNight(
   );
 }
 
+/// Scores the night at [index] in a list of nights sorted newest first,
+/// using the older nights after it as history.
+NightScores scoreAt(
+  List<SleepNight> nightsNewestFirst,
+  int index, {
+  required int goalMinutes,
+}) {
+  return scoreNight(
+    nightsNewestFirst[index],
+    previous: nightsNewestFirst.skip(index + 1).take(14).toList(),
+    goalMinutes: goalMinutes,
+  );
+}
+
 /// Sleep score =
 ///   60% duration (asleep / goal, capped at 100)
 /// + 25% consistency (bedtime vs your last 7 bedtimes; 90+ min off = 0)

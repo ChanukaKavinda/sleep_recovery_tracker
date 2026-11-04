@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/database.dart';
-import '../theme/app_colors.dart';
+import '../app_scope.dart';
+import '../models/sleep_night.dart';
+import '../theme/clay_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/clay.dart';
+import 'history_screen.dart';
 
-/// Manual sleep log: which night, bedtime, wake time, optional heart data.
+/// Add a night by hand, or edit an existing one ([existing] != null).
 class LogSleepScreen extends StatefulWidget {
-  const LogSleepScreen({super.key, required this.db});
+  const LogSleepScreen({super.key, this.existing});
 
-  final AppDatabase db;
+  /// The night being edited. Must have an id.
+  final SleepNight? existing;
 
   @override
   State<LogSleepScreen> createState() => _LogSleepScreenState();
@@ -19,20 +22,44 @@ class LogSleepScreen extends StatefulWidget {
 class _LogSleepScreenState extends State<LogSleepScreen> {
   /// The calendar date the night started (e.g. Mon 5 Oct for Mon -> Tue).
   late DateTime _night;
-  TimeOfDay _bed = const TimeOfDay(hour: 23, minute: 0);
-  TimeOfDay _wake = const TimeOfDay(hour: 7, minute: 0);
+  late TimeOfDay _bed;
+  late TimeOfDay _wake;
 
   final _rhrController = TextEditingController();
   final _hrvController = TextEditingController();
   bool _saving = false;
 
+  bool get _isEdit => widget.existing != null;
+
   @override
   void initState() {
     super.initState();
-    // Before noon you are logging last night, so the night started yesterday.
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    _night = now.hour < 12 ? today.subtract(const Duration(days: 1)) : today;
+    final existing = widget.existing;
+    if (existing != null) {
+      final bed = existing.bedtime;
+      // A bedtime after midnight belongs to the previous evening's night.
+      final bedDay = dateOnly(bed);
+      _night =
+          bed.hour < 12 ? bedDay.subtract(const Duration(days: 1)) : bedDay;
+      _bed = TimeOfDay(hour: bed.hour, minute: bed.minute);
+      _wake = TimeOfDay(
+        hour: existing.wakeTime.hour,
+        minute: existing.wakeTime.minute,
+      );
+      final rhr = existing.restingHeartRate;
+      final hrv = existing.hrvMs;
+      if (rhr != null) _rhrController.text = '$rhr';
+      if (hrv != null) _hrvController.text = '$hrv';
+    } else {
+      // Before noon you are logging last night, so the night started
+      // yesterday.
+      final now = DateTime.now();
+      final today = dateOnly(now);
+      _night =
+          now.hour < 12 ? today.subtract(const Duration(days: 1)) : today;
+      _bed = const TimeOfDay(hour: 23, minute: 0);
+      _wake = const TimeOfDay(hour: 7, minute: 0);
+    }
   }
 
   @override
@@ -74,8 +101,8 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _night,
-      firstDate: DateTime(now.year - 1),
+      initialDate: _night.isAfter(now) ? now : _night,
+      firstDate: DateTime(now.year - 2),
       lastDate: now,
     );
     if (picked != null) setState(() => _night = picked);
@@ -91,18 +118,19 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
     if (picked != null) setState(() => _wake = picked);
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _save() async {
     final bedtime = _bedtime;
     final wakeTime = _wakeTime;
     final minutes = wakeTime.difference(bedtime).inMinutes;
     if (minutes < 60 || minutes > 16 * 60) {
-      _showError('Sleep should be between 1 and 16 hours. Check the times.');
+      showClaySnack(
+        context,
+        'Sleep should be between 1 and 16 hours. Check the times.',
+      );
+      return;
+    }
+    if (wakeTime.isAfter(DateTime.now().add(const Duration(hours: 1)))) {
+      showClaySnack(context, 'The wake time is in the future.');
       return;
     }
 
@@ -111,33 +139,69 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
     final rhr = int.tryParse(rhrText);
     final hrv = int.tryParse(hrvText);
     if (rhrText.isNotEmpty && (rhr == null || rhr < 30 || rhr > 120)) {
-      _showError('Resting heart rate should be 30–120 bpm.');
+      showClaySnack(context, 'Resting heart rate should be 30–120 bpm.');
       return;
     }
     if (hrvText.isNotEmpty && (hrv == null || hrv < 5 || hrv > 250)) {
-      _showError('HRV should be 5–250 ms.');
+      showClaySnack(context, 'HRV should be 5–250 ms.');
       return;
     }
 
+    final db = AppScope.of(context).db;
+    final existing = widget.existing;
+    final night = SleepNight(
+      bedtime: bedtime,
+      wakeTime: wakeTime,
+      // Keep everything this screen does not edit.
+      stages: existing?.stages,
+      awakeMinutes: existing?.awakeMinutes,
+      restingHeartRate: rhr,
+      hrvMs: hrv,
+      mood: existing?.mood,
+      tags: existing?.tags ?? const <String>{},
+      note: existing?.note,
+      isNap: existing?.isNap ?? false,
+      source: existing?.source ?? SleepNight.sourceManual,
+      externalId: existing?.externalId,
+    );
+
     setState(() => _saving = true);
     try {
-      await widget.db.addManualNight(
-        bedtime: bedtime,
-        wakeTime: wakeTime,
-        restingHeartRate: rhr,
-        hrvMs: hrv,
-      );
+      final id = existing?.id;
+      if (id != null) {
+        await db.updateNight(id, night);
+      } else {
+        await db.insertNight(night);
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
+      showClaySnack(context, _isEdit ? 'Night updated' : 'Night saved');
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      _showError('Could not save: $e');
+      showClaySnack(context, 'Could not save: $e');
     }
+  }
+
+  Future<void> _delete() async {
+    final id = widget.existing?.id;
+    if (id == null) return;
+    final ok = await confirmDialog(
+      context,
+      title: 'Delete this night?',
+      message: 'You can undo this right after.',
+      confirmLabel: 'Delete',
+      danger: true,
+    );
+    if (!ok || !mounted) return;
+    final navigator = Navigator.of(context);
+    await deleteNightWithUndo(context, id);
+    navigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     final asleep = _wakeTime.difference(_bedtime);
     return Scaffold(
       body: SafeArea(
@@ -146,22 +210,18 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  ClayCircleButton(
-                    onTap: () => Navigator.of(context).pop(),
-                    semanticLabel: 'Back',
-                    child: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'Log sleep',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                  ),
-                ],
+              ClayScreenHeader(
+                title: _isEdit ? 'Edit night' : 'Log sleep',
+                action: _isEdit
+                    ? ClayCircleButton(
+                        onTap: _saving ? null : _delete,
+                        semanticLabel: 'Delete night',
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: c.danger,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(height: 24),
               _PickerTile(
@@ -188,22 +248,22 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
               Text.rich(
                 TextSpan(
                   children: [
-                    const TextSpan(text: 'Time asleep  '),
+                    const TextSpan(text: 'Time in bed  '),
                     TextSpan(
                       text: formatDuration(asleep),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.text,
+                        color: c.text,
                       ),
                     ),
                   ],
                 ),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textMuted,
+                  color: c.textMuted,
                 ),
               ),
               const SizedBox(height: 22),
@@ -219,19 +279,19 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'From your watch or phone app, if you have it.',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textMuted,
+                        color: c.textMuted,
                       ),
                     ),
                     const SizedBox(height: 14),
                     Row(
                       children: [
                         Expanded(
-                          child: _NumberField(
+                          child: ClayNumberField(
                             controller: _rhrController,
                             label: 'Resting HR',
                             suffix: 'bpm',
@@ -239,7 +299,7 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
                         ),
                         const SizedBox(width: 14),
                         Expanded(
-                          child: _NumberField(
+                          child: ClayNumberField(
                             controller: _hrvController,
                             label: 'HRV',
                             suffix: 'ms',
@@ -252,7 +312,9 @@ class _LogSleepScreenState extends State<LogSleepScreen> {
               ),
               const SizedBox(height: 28),
               ClayPillButton(
-                label: _saving ? 'Saving…' : 'Save night',
+                label: _saving
+                    ? 'Saving…'
+                    : (_isEdit ? 'Save changes' : 'Save night'),
                 icon: Icons.check_rounded,
                 onTap: _saving ? null : _save,
               ),
@@ -279,6 +341,7 @@ class _PickerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.clay;
     return Semantics(
       button: true,
       label: '$label: $value. Tap to change.',
@@ -291,15 +354,15 @@ class _PickerTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Row(
             children: [
-              Icon(icon, size: 22, color: AppColors.accent),
+              Icon(icon, size: 22, color: c.accent),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textMuted,
+                    color: c.textMuted,
                   ),
                 ),
               ),
@@ -311,10 +374,7 @@ class _PickerTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textMuted,
-              ),
+              Icon(Icons.chevron_right_rounded, color: c.textMuted),
             ],
           ),
         ),
@@ -323,16 +383,20 @@ class _PickerTile extends StatelessWidget {
   }
 }
 
-class _NumberField extends StatelessWidget {
-  const _NumberField({
+/// Pressed-in number input with a floating label and a unit suffix.
+class ClayNumberField extends StatelessWidget {
+  const ClayNumberField({
+    super.key,
     required this.controller,
     required this.label,
     required this.suffix,
+    this.maxLength = 3,
   });
 
   final TextEditingController controller;
   final String label;
   final String suffix;
+  final int maxLength;
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +410,7 @@ class _NumberField extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 3,
+          maxLength: maxLength,
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
           decoration: InputDecoration(
             labelText: label,
