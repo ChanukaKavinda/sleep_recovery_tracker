@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'models/sleep_night.dart';
+import 'data/database.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_colors.dart';
 import 'widgets/clay_nav_bar.dart';
 
 void main() {
-  runApp(const SleepRecoveryApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  // One database for the whole app, passed down to the screens.
+  final db = AppDatabase();
+  runApp(SleepRecoveryApp(db: db));
 }
 
 class SleepRecoveryApp extends StatelessWidget {
-  const SleepRecoveryApp({super.key});
+  const SleepRecoveryApp({super.key, required this.db});
+
+  final AppDatabase db;
 
   @override
   Widget build(BuildContext context) {
@@ -30,14 +35,16 @@ class SleepRecoveryApp extends StatelessWidget {
           displayColor: AppColors.text,
         ),
       ),
-      home: const AppShell(),
+      home: AppShell(db: db),
     );
   }
 }
 
 /// Holds the bottom bar and switches between the four tabs.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, required this.db});
+
+  final AppDatabase db;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -45,9 +52,6 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-
-  // Sample data for now. Replace with real data from Health Connect later.
-  final SleepNight _night = SleepNight.sample();
 
   static const _tabs = [
     ClayNavItem(icon: Icons.home_rounded, label: 'Home'),
@@ -66,7 +70,7 @@ class _AppShellState extends State<AppShell> {
         body: IndexedStack(
           index: _index,
           children: [
-            HomeScreen(night: _night),
+            HomeScreen(db: widget.db),
             const _ComingSoon(title: 'Trends'),
             const _ComingSoon(title: 'Insights'),
             const _ComingSoon(title: 'Profile'),

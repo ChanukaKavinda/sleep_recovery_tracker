@@ -1,4 +1,30 @@
 /// Small text helpers, so the app needs no extra date package yet.
+library;
+
+const _weekdays = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+const _months = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 /// 7h 24m, 4h 04m
 String formatDuration(Duration d) {
@@ -19,28 +45,12 @@ String formatTime(DateTime t) => formatClock(t.hour, t.minute);
 
 /// Tuesday, 6 October
 String formatLongDate(DateTime d) {
-  const weekdays = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  return '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
+  return '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
+}
+
+/// Tue 6 Oct
+String formatShortDate(DateTime d) {
+  final weekday = _weekdays[d.weekday - 1].substring(0, 3);
+  final month = _months[d.month - 1].substring(0, 3);
+  return '$weekday ${d.day} $month';
 }

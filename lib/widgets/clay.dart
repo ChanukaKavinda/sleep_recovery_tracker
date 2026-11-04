@@ -171,6 +171,71 @@ class ClayCircleButton extends StatelessWidget {
   }
 }
 
+/// Wide pill button. [filled] = accent colour (main action).
+/// Pass onTap: null to show it disabled.
+class ClayPillButton extends StatelessWidget {
+  const ClayPillButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.filled = true,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? icon;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = filled ? Colors.white : AppColors.text;
+    final buttonIcon = icon;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: onTap == null ? 0.5 : 1,
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: filled ? AppColors.accent : AppColors.background,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: clayShadows(5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (buttonIcon != null) ...[
+                  Icon(buttonIcon, size: 20, color: foreground),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// On/off switch in the clay style.
 class ClaySwitch extends StatelessWidget {
   const ClaySwitch({
