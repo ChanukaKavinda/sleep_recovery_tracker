@@ -7,6 +7,7 @@ import '../models/sleep_night.dart';
 import '../theme/clay_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/clay.dart';
+import '../widgets/score_breakdown_sheet.dart';
 import '../widgets/sleep_stage_ring.dart';
 import 'history_screen.dart';
 import 'log_sleep_screen.dart';
@@ -123,6 +124,7 @@ class _HomeContent extends StatelessWidget {
           night: night,
           score: scores.sleepScore,
           goalMinutes: settings.sleepGoalMinutes,
+          onTap: () => showScoreBreakdown(context, scores),
         ),
       ),
       const SizedBox(height: 14),
@@ -134,7 +136,13 @@ class _HomeContent extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _RecoveryCard(percent: scores.recoveryPercent)),
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => showScoreBreakdown(context, scores),
+                child: _RecoveryCard(percent: scores.recoveryPercent),
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: _HeartRateCard(

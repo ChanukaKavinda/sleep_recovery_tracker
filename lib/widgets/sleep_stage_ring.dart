@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../logic/scoring.dart';
 import '../models/sleep_night.dart';
 import '../theme/clay_theme.dart';
 import '../utils/formatters.dart';
@@ -105,6 +106,27 @@ class SleepStageRing extends StatelessWidget {
                     color: c.textMuted,
                   ),
                 ),
+                if (onTap != null) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        scoreLabel(score),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: c.accent,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: c.accent,
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -114,7 +136,7 @@ class SleepStageRing extends StatelessWidget {
 
     final tap = onTap;
     return Semantics(
-      label: 'Sleep score $score. $description',
+      label: 'Sleep score $score, ${scoreLabel(score)}. $description',
       button: tap != null,
       onTap: tap,
       excludeSemantics: true,
